@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AçaíMetrics | v9.7 Final</title>
+    <title>AçaíMetrics | v10.1 Metas</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -21,14 +21,19 @@
         button:hover { opacity: 0.9; }
         .btn-primary { background-color: #9333ea; color: white; font-weight: bold; padding: 10px 20px; border-radius: 8px; width: 100%; }
         .btn-success { background-color: #16a34a; color: white; font-weight: bold; padding: 10px 20px; border-radius: 8px; width: 100%; }
+        .btn-warning { background-color: #f59e0b; color: black; font-weight: bold; padding: 10px 20px; border-radius: 8px; width: 100%; }
         .btn-danger { color: #f87171; }
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 50; }
         .modal-content { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #475569; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
+        
+        /* Animação suave para quando clicar em editar */
+        .highlight { animation: highlightPulse 1s; }
+        @keyframes highlightPulse { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
     </style>
 
     <script>
         window.onerror = function(message, source, lineno, colno, error) {
-            document.body.innerHTML = '<div style="color:red; padding:20px; background:#330000; font-size:18px; font-family:monospace;"><h1>Erro Crítico Detectado!</h1><p>'+message+'</p><p>Linha: '+lineno+'</p><p>Verifique se copiou o código completo.</p></div>';
+            document.body.innerHTML = '<div style="color:red; padding:20px; background:#330000; font-size:18px; font-family:monospace;"><h1>Erro Crítico Detectado!</h1><p>'+message+'</p><p>Linha: '+lineno+'</p></div>';
         };
     </script>
 </head>
@@ -40,18 +45,23 @@
         const { useState, useEffect } = React;
 
         // ==========================================================
-        // ⚠️ COLE SUAS CHAVES ABAIXO (Mantenha as aspas!)
+        // ⚠️ COLE SUAS CHAVES ABAIXO
         // ==========================================================
+        
+        // 1. Cole a URL do Supabase aqui
         const SUPABASE_URL = "https://gmbtewbpojuqrnehrfmk.supabase.co"; 
+        
+        // 2. Cole a KEY (anon public) aqui
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtYnRld2Jwb2p1cXJuZWhyZm1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyODE0MTQsImV4cCI6MjA4MTg1NzQxNH0.F2K_ZzXCJAFDplTqSK0ubq5zfSXItjIatZnb-pdOAOQ";
+        
         // ==========================================================
 
         let client = null;
         let erroConfig = null;
 
         try {
-            if (!SUPABASE_URL || SUPABASE_URL.includes("SUA_URL")) throw new Error("ERRO: Configure a URL do Supabase na linha 58.");
-            if (!SUPABASE_KEY || SUPABASE_KEY.includes("SUA_CHAVE")) throw new Error("ERRO: Configure a CHAVE do Supabase na linha 59.");
+            if (!SUPABASE_URL || SUPABASE_URL.includes("SEU_ID")) throw new Error("ERRO: Configure a URL do Supabase na linha 61.");
+            if (!SUPABASE_KEY || SUPABASE_KEY.includes("SUA_KEY")) throw new Error("ERRO: Configure a CHAVE do Supabase na linha 64.");
             client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         } catch (err) {
             erroConfig = err.message;
@@ -62,51 +72,93 @@
             return <i data-lucide={name} style={{ width: size, height: size }}></i>;
         };
 
-        // --- MÓDULO 1: ESTOQUE (Calculadora Automática) ---
+        // --- MÓDULO 1: ESTOQUE (Com Edição) ---
         const ModuloEstoque = () => {
             const [items, setItems] = useState([]);
+            const [editando, setEditando] = useState(null); // Estado para controlar edição
             const [form, setForm] = useState({ nome: '', unidade_medida: 'G', categoria: 'ingrediente', preco_embalagem: '', tamanho_embalagem: '' });
 
             useEffect(() => { carregar(); }, []);
             async function carregar() { const { data } = await client.from('insumos').select('*').order('nome'); if (data) setItems(data); }
 
+            function prepararEdicao(item) {
+                setEditando(item.id);
+                // Calcula de volta o preço da embalagem aproximado para facilitar a edição
+                // (Custo atual * tamanho)
+                const precoEstimado = (Number(item.custo_atual) * 1000).toFixed(2); // Valor simbólico caso não tenha o tamanho salvo, mas o usuário ajusta
+                
+                // Como não salvamos tamanho_embalagem no banco, o usuário terá que redigitar para recalcular o custo, é mais seguro.
+                setForm({ 
+                    nome: item.nome, 
+                    categoria: item.categoria, 
+                    unidade_medida: item.unidade_medida, 
+                    preco_embalagem: '', // Força o usuário a redigitar para garantir cálculo novo
+                    tamanho_embalagem: '' 
+                });
+                window.scrollTo(0,0);
+            }
+
+            function cancelarEdicao() {
+                setEditando(null);
+                setForm({ nome: '', unidade_medida: 'G', categoria: 'ingrediente', preco_embalagem: '', tamanho_embalagem: '' });
+            }
+
             async function salvar() {
-                if (!form.nome || !form.preco_embalagem || !form.tamanho_embalagem) return alert("Preencha todos os campos!");
+                if (!form.nome || !form.preco_embalagem || !form.tamanho_embalagem) return alert("Preencha todos os campos para recalcular o custo!");
                 const custoCalculado = Number(form.preco_embalagem) / Number(form.tamanho_embalagem);
                 
-                await client.from('insumos').insert([{ 
-                    nome: form.nome, categoria: form.categoria, unidade_medida: form.unidade_medida, custo_atual: custoCalculado 
-                }]);
+                const payload = { 
+                    nome: form.nome, 
+                    categoria: form.categoria, 
+                    unidade_medida: form.unidade_medida, 
+                    custo_atual: custoCalculado 
+                };
+
+                if (editando) {
+                    await client.from('insumos').update(payload).eq('id', editando);
+                    alert("Item atualizado com sucesso!");
+                } else {
+                    await client.from('insumos').insert([payload]);
+                }
                 
-                setForm({ nome: '', unidade_medida: 'G', categoria: 'ingrediente', preco_embalagem: '', tamanho_embalagem: '' }); 
+                cancelarEdicao();
                 carregar();
             }
-            async function excluir(id) { if (confirm("Tem certeza que deseja apagar?")) { await client.from('insumos').delete().eq('id', id); carregar(); } }
+            async function excluir(id) { if (confirm("Apagar?")) { await client.from('insumos').delete().eq('id', id); carregar(); } }
 
             return (
                 <div className="space-y-6 animate-fade">
                     <h2 className="text-2xl font-bold text-white mb-4">Estoque & Insumos</h2>
-                    <div className="card">
+                    <div className={`card ${editando ? 'border-orange-500 border-2' : ''}`}>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-white">{editando ? '✏️ Editando Item' : 'Novo Item'}</h3>
+                            {editando && <button onClick={cancelarEdicao} className="text-xs text-red-400 underline">Cancelar Edição</button>}
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div><label className="text-sm text-slate-400">Nome do Item</label><input value={form.nome} onChange={e=>setForm({...form, nome:e.target.value})} placeholder="Ex: Leite em Pó, Açaí Puro" /></div>
+                            <div><label className="text-sm text-slate-400">Nome</label><input value={form.nome} onChange={e=>setForm({...form, nome:e.target.value})} placeholder="Ex: Leite em Pó" /></div>
                             <div><label className="text-sm text-slate-400">Categoria</label><select value={form.categoria} onChange={e=>setForm({...form, categoria:e.target.value})}><option value="ingrediente">Ingrediente</option><option value="embalagem">Embalagem</option></select></div>
-                            <div><label className="text-sm text-slate-400">Preço Pago na Nota (R$)</label><input type="number" value={form.preco_embalagem} onChange={e=>setForm({...form, preco_embalagem:e.target.value})} placeholder="Ex: 85.00" /></div>
+                            <div><label className="text-sm text-slate-400">Preço Pago (R$)</label><input type="number" value={form.preco_embalagem} onChange={e=>setForm({...form, preco_embalagem:e.target.value})} placeholder={editando ? "Redigite o valor pago" : "Ex: 85.00"} /></div>
                             <div className="flex gap-2">
-                                <div className="flex-1"><label className="text-sm text-slate-400">Quantidade Total</label><input type="number" value={form.tamanho_embalagem} onChange={e=>setForm({...form, tamanho_embalagem:e.target.value})} placeholder="Ex: 7000 (para 7kg)" /></div>
-                                <div className="w-1/3"><label className="text-sm text-slate-400">Unid</label><select value={form.unidade_medida} onChange={e=>setForm({...form, unidade_medida:e.target.value})}><option value="G">Grama</option><option value="ML">ML</option><option value="UN">Unidade</option></select></div>
+                                <div className="flex-1"><label className="text-sm text-slate-400">Qtd Total</label><input type="number" value={form.tamanho_embalagem} onChange={e=>setForm({...form, tamanho_embalagem:e.target.value})} placeholder={editando ? "Redigite o peso total" : "Ex: 7000"} /></div>
+                                <div className="w-1/3"><label className="text-sm text-slate-400">Unid</label><select value={form.unidade_medida} onChange={e=>setForm({...form, unidade_medida:e.target.value})}><option value="G">G</option><option value="ML">ML</option><option value="UN">UN</option></select></div>
                             </div>
                         </div>
-                        <button onClick={salvar} className="btn-primary w-full">Salvar Item</button>
+                        <button onClick={salvar} className={editando ? "btn-warning" : "btn-primary"}>
+                            {editando ? 'Atualizar Item' : 'Salvar Item'}
+                        </button>
                     </div>
                     <div className="card overflow-x-auto">
                         <table className="w-full text-left text-sm text-slate-300">
-                            <thead><tr className="border-b border-slate-600"><th className="p-3">Nome</th><th className="p-3">Custo Unit.</th><th className="p-3">Ação</th></tr></thead>
+                            <thead><tr className="border-b border-slate-600"><th className="p-3">Nome</th><th className="p-3">Custo Unit.</th><th className="p-3 text-right">Ações</th></tr></thead>
                             <tbody>
                                 {items.map(i => (
                                     <tr key={i.id} className="border-b border-slate-700/50">
                                         <td className="p-3 font-bold text-white">{i.nome}</td>
                                         <td className="p-3 text-green-400">R$ {Number(i.custo_atual).toFixed(4)} / {i.unidade_medida}</td>
-                                        <td className="p-3"><button onClick={()=>excluir(i.id)} className="text-red-400 hover:text-red-300 font-bold">Excluir</button></td>
+                                        <td className="p-3 text-right flex justify-end gap-3">
+                                            <button onClick={()=>prepararEdicao(i)} className="text-blue-400 hover:text-white"><Icon name="pencil" size={18}/></button>
+                                            <button onClick={()=>excluir(i.id)} className="text-red-400 hover:text-red-300"><Icon name="trash-2" size={18}/></button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -116,7 +168,7 @@
             );
         };
 
-        // --- MÓDULO 2: MEUS PRODUTOS (Receitas) ---
+        // --- MÓDULO 2: MEUS PRODUTOS (Edição de Nome já existia, ajustado) ---
         const ModuloProdutos = () => {
             const [produtos, setProdutos] = useState([]);
             const [nomeNovo, setNomeNovo] = useState('');
@@ -230,7 +282,7 @@
             );
         };
 
-        // --- MÓDULO 3: PRECIFICAÇÃO (Promoção) ---
+        // --- MÓDULO 3: PRECIFICAÇÃO (Config já é Edição) ---
         const ModuloPrecificacao = () => {
             const [custoProd, setCustoProd] = useState('');
             const [lucro, setLucro] = useState(20);
@@ -273,7 +325,6 @@
                         <div className="card"><label className="text-slate-400 text-sm">Imposto (%)</label><input type="number" value={imposto} onChange={e=>setImposto(Number(e.target.value))} /></div>
                     </div>
                     
-                    <h3 className="text-xl font-bold text-white mb-4">Preços de Venda Sugeridos:</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {canais.map(c => {
                             const preco = calcular(c);
@@ -285,18 +336,8 @@
                                             <Icon name="settings" size={14} /> Configurar
                                         </button>
                                     </div>
-                                    
-                                    {c.desconto_cliente_percentual > 0 && (
-                                        <div className="mt-2 inline-block bg-green-900/50 text-green-400 px-2 py-1 rounded text-xs font-bold border border-green-500/50">
-                                            🏷️ Promoção: {c.desconto_cliente_percentual}% OFF
-                                        </div>
-                                    )}
-
-                                    <div className="mt-3 text-xs text-slate-500 flex gap-2">
-                                        <span>Taxa: {c.comissao_percentual}%</span>
-                                        <span>Frete: R$ {c.custo_frete_fixo}</span>
-                                    </div>
-                                    
+                                    {c.desconto_cliente_percentual > 0 && <div className="mt-2 inline-block bg-green-900/50 text-green-400 px-2 py-1 rounded text-xs font-bold border border-green-500/50">🏷️ Promoção: {c.desconto_cliente_percentual}% OFF</div>}
+                                    <div className="mt-3 text-xs text-slate-500 flex gap-2"><span>Taxa: {c.comissao_percentual}%</span><span>Frete: R$ {c.custo_frete_fixo}</span></div>
                                     <div className="flex justify-between items-end mt-4 pt-4 border-t border-slate-700/50">
                                         <div><span className="text-xs text-slate-400 block uppercase">Vender Por</span><span className="text-3xl font-bold text-white">R$ {preco.toFixed(2)}</span></div>
                                         <div className="text-right"><span className="text-xs text-slate-400 block uppercase">Lucro Liq.</span><span className="text-xl font-bold text-green-400">R$ {(preco * (lucro/100)).toFixed(2)}</span></div>
@@ -305,24 +346,16 @@
                             )
                         })}
                     </div>
-
                     {canalEdit && (
                         <div className="modal-overlay">
                             <div className="modal-content">
                                 <h3 className="text-xl font-bold text-white mb-4">Configurar {canalEdit.nome}</h3>
                                 <div className="space-y-4">
                                     <div><label className="text-sm text-slate-400">Comissão do App (%)</label><input type="number" value={canalEdit.comissao_percentual} onChange={e=>setCanalEdit({...canalEdit, comissao_percentual: Number(e.target.value)})} /></div>
-                                    <div><label className="text-sm text-slate-400">Frete Fixo Pago pela Loja (R$)</label><input type="number" value={canalEdit.custo_frete_fixo} onChange={e=>setCanalEdit({...canalEdit, custo_frete_fixo: Number(e.target.value)})} /></div>
-                                    <div className="bg-green-900/20 p-3 rounded border border-green-900/50">
-                                        <label className="text-sm text-green-400 font-bold">Desconto Promocional ao Cliente (%)</label>
-                                        <input type="number" value={canalEdit.desconto_cliente_percentual} onChange={e=>setCanalEdit({...canalEdit, desconto_cliente_percentual: Number(e.target.value)})} className="border-green-500/50" />
-                                        <span className="text-[10px] text-slate-500 block -mt-2">O sistema calcula o preço "De" para você vender com desconto real.</span>
-                                    </div>
+                                    <div><label className="text-sm text-slate-400">Frete Fixo (R$)</label><input type="number" value={canalEdit.custo_frete_fixo} onChange={e=>setCanalEdit({...canalEdit, custo_frete_fixo: Number(e.target.value)})} /></div>
+                                    <div className="bg-green-900/20 p-3 rounded border border-green-900/50"><label className="text-sm text-green-400 font-bold">Desconto Promocional (%)</label><input type="number" value={canalEdit.desconto_cliente_percentual} onChange={e=>setCanalEdit({...canalEdit, desconto_cliente_percentual: Number(e.target.value)})} /></div>
                                 </div>
-                                <div className="flex gap-2 mt-6">
-                                    <button onClick={()=>setCanalEdit(null)} className="btn-danger w-full">Cancelar</button>
-                                    <button onClick={salvarCanal} className="btn-success w-full">Salvar Alterações</button>
-                                </div>
+                                <div className="flex gap-2 mt-6"><button onClick={()=>setCanalEdit(null)} className="btn-danger w-full">Cancelar</button><button onClick={salvarCanal} className="btn-success w-full">Salvar</button></div>
                             </div>
                         </div>
                     )}
@@ -330,13 +363,33 @@
             );
         };
 
-        // --- MÓDULO 4: CUSTOS FIXOS ---
+        // --- MÓDULO 4: CUSTOS FIXOS (Com Edição e Metas Duplas) ---
         const ModuloCustos = () => {
             const [custos, setCustos] = useState([]);
             const [novo, setNovo] = useState({ nome: '', valor: '' });
+            const [editando, setEditando] = useState(null);
+
             useEffect(() => { load(); }, []);
             async function load() { const {data} = await client.from('custos_fixos').select('*'); if(data) setCustos(data); }
-            async function add() { if(!novo.nome || !novo.valor) return; await client.from('custos_fixos').insert([novo]); setNovo({nome:'', valor:''}); load(); }
+            
+            async function salvar() { 
+                if(!novo.nome || !novo.valor) return; 
+                
+                if (editando) {
+                    await client.from('custos_fixos').update(novo).eq('id', editando);
+                    setEditando(null);
+                } else {
+                    await client.from('custos_fixos').insert([novo]); 
+                }
+                setNovo({nome:'', valor:''}); 
+                load(); 
+            }
+            
+            function prepararEdicao(item) {
+                setNovo({ nome: item.nome, valor: item.valor });
+                setEditando(item.id);
+            }
+
             async function del(id) { await client.from('custos_fixos').delete().eq('id', id); load(); }
             const total = custos.reduce((acc, i) => acc + Number(i.valor), 0);
 
@@ -344,35 +397,56 @@
                 <div className="space-y-6">
                     <h2 className="text-2xl font-bold text-white mb-4">Custos Fixos Mensais</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="card">
-                            <div className="flex gap-2 mb-4">
-                                <input placeholder="Descrição (Ex: Aluguel, Luz)" value={novo.nome} onChange={e=>setNovo({...novo, nome:e.target.value})} className="flex-1" />
-                                <input type="number" placeholder="Valor" value={novo.valor} onChange={e=>setNovo({...novo, valor:e.target.value})} className="w-32" />
-                                <button onClick={add} className="btn-primary w-auto">Add</button>
+                        <div className={`card ${editando ? 'border-orange-500 border-2' : ''}`}>
+                            <div className="flex gap-2 mb-4 items-end">
+                                <div className="flex-1">
+                                    <label className="text-xs text-slate-400 mb-1 block">Descrição</label>
+                                    <input placeholder="Ex: Aluguel" value={novo.nome} onChange={e=>setNovo({...novo, nome:e.target.value})} className="mb-0" />
+                                </div>
+                                <div className="w-32">
+                                    <label className="text-xs text-slate-400 mb-1 block">Valor (R$)</label>
+                                    <input type="number" placeholder="0.00" value={novo.valor} onChange={e=>setNovo({...novo, valor:e.target.value})} className="mb-0" />
+                                </div>
+                                <button onClick={salvar} className={`mb-0 px-4 py-2 rounded font-bold text-white ${editando ? 'bg-orange-500' : 'bg-purple-600'}`}>
+                                    {editando ? 'OK' : 'Add'}
+                                </button>
                             </div>
-                            <ul className="space-y-2">
+                            {editando && <p className="text-right text-xs text-orange-400 cursor-pointer mb-2" onClick={()=>{setEditando(null); setNovo({nome:'', valor:''})}}>Cancelar Edição</p>}
+                            <ul className="space-y-2 mt-4">
                                 {custos.map(c => (
                                     <li key={c.id} className="flex justify-between items-center bg-slate-800 p-3 rounded border border-slate-700">
                                         <span className="text-slate-300">{c.nome}</span>
                                         <div className="flex items-center gap-4">
                                             <span className="font-bold text-white">R$ {Number(c.valor).toFixed(2)}</span>
-                                            <button onClick={()=>del(c.id)} className="text-red-500 hover:text-red-300"><Icon name="trash-2" size={16}/></button>
+                                            <div className="flex gap-2">
+                                                <button onClick={()=>prepararEdicao(c)} className="text-blue-400"><Icon name="pencil" size={16}/></button>
+                                                <button onClick={()=>del(c.id)} className="text-red-500"><Icon name="trash-2" size={16}/></button>
+                                            </div>
                                         </div>
                                     </li>
                                 ))}
                             </ul>
-                            <div className="mt-4 pt-4 border-t border-slate-600 text-right">
-                                <span className="text-slate-400 mr-2">Total Mensal:</span>
-                                <span className="text-2xl font-bold text-white">R$ {total.toFixed(2)}</span>
-                            </div>
+                            <div className="mt-4 pt-4 border-t border-slate-600 text-right"><span className="text-slate-400 mr-2">Total Mensal:</span><span className="text-2xl font-bold text-white">R$ {total.toFixed(2)}</span></div>
                         </div>
-                        <div className="card flex flex-col items-center justify-center text-center bg-gradient-to-b from-slate-800 to-slate-900">
-                            <div className="p-4 bg-purple-900/30 rounded-full mb-4"><Icon name="target" size={40} className="text-purple-400" /></div>
-                            <h3 className="text-lg font-bold text-white">Meta de Vendas (Ponto de Equilíbrio)</h3>
-                            <p className="text-slate-400 text-sm mb-6 px-6">Para pagar os R$ {total.toFixed(0)} de contas fixas (considerando 20% de margem real):</p>
-                            <div className="bg-slate-950 p-6 rounded-xl border border-slate-700 w-full max-w-xs">
-                                <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Você precisa faturar</p>
-                                <p className="text-3xl font-bold text-green-400 mt-1">R$ {(total / 0.20).toFixed(2)}</p>
+                        
+                        {/* PAINEL DUPLO DE METAS */}
+                        <div className="card flex flex-col items-center justify-center text-center bg-gradient-to-b from-slate-800 to-slate-900 gap-4">
+                            <div className="p-4 bg-purple-900/30 rounded-full mb-2"><Icon name="target" size={40} className="text-purple-400" /></div>
+                            
+                            <div className="w-full space-y-4">
+                                {/* Ponto de Equilíbrio */}
+                                <div className="bg-slate-950 p-4 rounded-xl border border-yellow-900/50 w-full">
+                                    <p className="text-xs text-yellow-500 uppercase font-bold tracking-wider">⚖️ Ponto de Equilíbrio (Zero a Zero)</p>
+                                    <p className="text-2xl font-bold text-yellow-400 mt-1">R$ {(total / 0.40).toFixed(2)}</p>
+                                    <p className="text-[10px] text-slate-500 mt-1">Mínimo para pagar fornecedores e contas.</p>
+                                </div>
+
+                                {/* Meta de Ouro */}
+                                <div className="bg-slate-950 p-4 rounded-xl border border-green-900/50 w-full">
+                                    <p className="text-xs text-green-500 uppercase font-bold tracking-wider">🚀 Meta Ideal (Lucro Real)</p>
+                                    <p className="text-3xl font-bold text-green-400 mt-1">R$ {(total / 0.20).toFixed(2)}</p>
+                                    <p className="text-[10px] text-slate-500 mt-1">Empresa saudável e crescendo.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -380,51 +454,65 @@
             );
         };
 
-        // --- MÓDULO 5: FLUXO DE CAIXA (Corrigido com Categoria) ---
+        // --- MÓDULO 5: FLUXO DE CAIXA (Com Edição) ---
         const ModuloFluxo = () => {
             const [movs, setMovs] = useState([]);
             const [canais, setCanais] = useState([]);
+            const [editando, setEditando] = useState(null);
             
-            // CORREÇÃO CRÍTICA: Inicializar data e categoria para não dar erro no banco
             const [form, setForm] = useState({ 
-                tipo: 'receita', 
-                descricao: '', 
-                valor: '', 
-                data_movimento: new Date().toISOString().split('T')[0], 
-                canal_venda_id: '',
-                categoria: 'Vendas' 
+                tipo: 'receita', descricao: '', valor: '', data_movimento: new Date().toISOString().split('T')[0], canal_venda_id: '', categoria: 'Vendas' 
             });
             
             useEffect(() => { load(); loadCanais(); }, []);
             async function loadCanais() { const {data} = await client.from('canais_venda').select('*'); if(data) setCanais(data); }
             async function load() { const {data} = await client.from('fluxo_caixa').select('*, canais_venda(nome)').order('data_movimento', {ascending: false}); if(data) setMovs(data); }
             
-            async function salvar() {
-                // Validação
-                if (!form.data_movimento || !form.descricao || !form.valor || !form.categoria) {
-                    return alert("Preencha Data, Categoria, Descrição e Valor!");
-                }
+            function prepararEdicao(item) {
+                setEditando(item.id);
+                setForm({
+                    tipo: item.tipo,
+                    descricao: item.descricao,
+                    valor: item.valor,
+                    data_movimento: item.data_movimento,
+                    canal_venda_id: item.canal_venda_id || '',
+                    categoria: item.categoria || 'Vendas'
+                });
+                window.scrollTo(0, 0); // Sobe a tela para o formulário
+            }
 
-                const payload = { 
-                    ...form, 
-                    canal_venda_id: form.tipo === 'receita' ? form.canal_venda_id : null 
-                };
-                
+            function cancelarEdicao() {
+                setEditando(null);
+                setForm({ tipo: 'receita', descricao: '', valor: '', data_movimento: new Date().toISOString().split('T')[0], canal_venda_id: '', categoria: 'Vendas' });
+            }
+
+            async function salvar() {
+                if (!form.data_movimento || !form.descricao || !form.valor || !form.categoria) return alert("Preencha Data, Categoria, Descrição e Valor!");
+
+                const payload = { ...form, canal_venda_id: form.tipo === 'receita' ? form.canal_venda_id : null };
                 if (!payload.canal_venda_id) delete payload.canal_venda_id; 
                 
-                const { error } = await client.from('fluxo_caixa').insert([payload]);
-                
-                if (error) {
-                    alert("Erro ao salvar: " + error.message);
+                if (editando) {
+                    const { error } = await client.from('fluxo_caixa').update(payload).eq('id', editando);
+                    if (error) alert("Erro: " + error.message);
+                    else { alert("Lançamento corrigido!"); cancelarEdicao(); load(); }
                 } else {
-                    setForm(prev => ({ ...prev, descricao: '', valor: '' })); 
+                    const { error } = await client.from('fluxo_caixa').insert([payload]);
+                    if (error) alert("Erro: " + error.message);
+                    else { setForm(prev => ({ ...prev, descricao: '', valor: '' })); load(); }
+                }
+            }
+
+            async function excluir(id) {
+                if(confirm("Deseja realmente apagar este lançamento?")) {
+                    await client.from('fluxo_caixa').delete().eq('id', id);
                     load();
                 }
             }
 
             const totais = movs.reduce((acc, m) => {
                 const val = Number(m.valor);
-                if (m.tipo === 'receita') acc.entradas += val; else acc.saidas += val;
+                if (m.tipo === 'receita' || m.tipo === 'entrada') acc.entradas += val; else acc.saidas += val;
                 return acc;
             }, { entradas: 0, saidas: 0 });
 
@@ -437,38 +525,33 @@
                         <div className="card border-l-4 border-blue-500"><p className="text-xs text-slate-400">SALDO</p><p className={`text-2xl font-bold ${totais.entradas-totais.saidas>=0?'text-blue-400':'text-red-400'}`}>R$ {(totais.entradas - totais.saidas).toFixed(2)}</p></div>
                     </div>
                     
-                    <div className="card border border-slate-600">
-                        <h3 className="font-bold text-white mb-4 flex items-center gap-2"><Icon name="plus-circle" /> Novo Lançamento</h3>
+                    <div className={`card border border-slate-600 ${editando ? 'border-orange-500 border-2' : ''}`}>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-white flex items-center gap-2">
+                                <Icon name={editando ? "pencil" : "plus-circle"} /> {editando ? "Editando Lançamento" : "Novo Lançamento"}
+                            </h3>
+                            {editando && <button onClick={cancelarEdicao} className="text-red-400 text-sm underline">Cancelar</button>}
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                             <select value={form.tipo} onChange={e=>setForm({...form, tipo:e.target.value})} className="font-bold"><option value="receita">Receita (+)</option><option value="despesa">Despesa (-)</option></select>
                             <input type="date" value={form.data_movimento} onChange={e=>setForm({...form, data_movimento:e.target.value})} />
-                            
-                            {/* CAMPO NOVO: CATEGORIA (CORREÇÃO DO ERRO) */}
                             <select value={form.categoria} onChange={e=>setForm({...form, categoria:e.target.value})}>
-                                <option value="Vendas">Vendas</option>
-                                <option value="Insumos">Insumos</option>
-                                <option value="Operacional">Operacional</option>
-                                <option value="Pessoal">Pessoal</option>
-                                <option value="Outros">Outros</option>
+                                <option value="Vendas">Vendas</option><option value="Insumos">Insumos</option><option value="Operacional">Operacional</option><option value="Pessoal">Pessoal</option><option value="Outros">Outros</option>
                             </select>
-
                             <input placeholder="Descrição" value={form.descricao} onChange={e=>setForm({...form, descricao:e.target.value})} className="md:col-span-1" />
-                            
                             {form.tipo === 'receita' ? (
-                                <select value={form.canal_venda_id} onChange={e=>setForm({...form, canal_venda_id:e.target.value})}>
-                                    <option value="">Canal...</option>
-                                    {canais.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
-                                </select>
+                                <select value={form.canal_venda_id} onChange={e=>setForm({...form, canal_venda_id:e.target.value})}><option value="">Canal...</option>{canais.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}</select>
                             ) : (<input disabled placeholder="-" className="opacity-50" />)}
-                            
                             <input type="number" placeholder="Valor" value={form.valor} onChange={e=>setForm({...form, valor:e.target.value})} />
                         </div>
-                        <button onClick={salvar} className="btn-success w-full mt-2 font-bold py-3">LANÇAR</button>
+                        <button onClick={salvar} className={`w-full mt-2 font-bold py-3 rounded ${editando ? 'btn-warning' : 'btn-success'}`}>
+                            {editando ? 'ATUALIZAR LANÇAMENTO' : 'LANÇAR'}
+                        </button>
                     </div>
 
                     <div className="card overflow-x-auto">
                         <table className="w-full text-left text-sm text-slate-300">
-                            <thead><tr className="border-b border-slate-600"><th className="p-3">Data</th><th className="p-3">Desc</th><th className="p-3">Categ.</th><th className="p-3">Canal</th><th className="p-3 text-right">Valor</th></tr></thead>
+                            <thead><tr className="border-b border-slate-600"><th className="p-3">Data</th><th className="p-3">Desc</th><th className="p-3">Categ.</th><th className="p-3">Canal</th><th className="p-3 text-right">Valor</th><th className="p-3 text-right">Ações</th></tr></thead>
                             <tbody>
                                 {movs.map(m => (
                                     <tr key={m.id} className="border-b border-slate-700/50 hover:bg-slate-800 transition">
@@ -476,8 +559,12 @@
                                         <td className="p-3 font-medium text-white">{m.descricao}</td>
                                         <td className="p-3 text-xs uppercase bg-slate-800 rounded px-2">{m.categoria || '-'}</td>
                                         <td className="p-3 text-xs uppercase text-slate-400">{m.canais_venda?.nome || '-'}</td>
-                                        <td className={`p-3 text-right font-bold ${m.tipo==='receita'?'text-green-400':'text-red-400'}`}>
-                                            {m.tipo==='receita'?'+':'-'} R$ {Number(m.valor).toFixed(2)}
+                                        <td className={`p-3 text-right font-bold ${m.tipo==='receita'||m.tipo==='entrada'?'text-green-400':'text-red-400'}`}>
+                                            {m.tipo==='receita'||m.tipo==='entrada'?'+':'-'} R$ {Number(m.valor).toFixed(2)}
+                                        </td>
+                                        <td className="p-3 text-right flex justify-end gap-3">
+                                            <button onClick={()=>prepararEdicao(m)} className="text-blue-400 hover:text-white"><Icon name="pencil" size={18}/></button>
+                                            <button onClick={()=>excluir(m.id)} className="text-red-400 hover:text-red-300"><Icon name="trash-2" size={18}/></button>
                                         </td>
                                     </tr>
                                 ))}
@@ -502,7 +589,7 @@
             return (
                 <div className="min-h-screen flex flex-col md:flex-row">
                     <aside className="w-full md:w-64 bg-slate-900 border-r border-slate-800 p-4 flex flex-col gap-2">
-                        <div className="mb-6 p-2"><h1 className="text-2xl font-bold text-purple-400 flex items-center gap-2"><Icon name="zap" /> AçaíMetrics</h1><p className="text-xs text-slate-500 mt-1">Versão 9.7 Final</p></div>
+                        <div className="mb-6 p-2"><h1 className="text-2xl font-bold text-purple-400 flex items-center gap-2"><Icon name="zap" /> AçaíMetrics</h1><p className="text-xs text-slate-500 mt-1">Versão 10.1 Metas</p></div>
                         <nav className="flex-1 space-y-1">
                             <NavItem id="estoque" icon="package" label="1. Estoque" />
                             <NavItem id="produtos" icon="coffee" label="2. Meus Produtos" />
