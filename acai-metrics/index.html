@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AçaíMetrics | v10.1 Metas</title>
+    <title>AçaíMetrics | v11.0 Combos</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -26,7 +26,7 @@
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 50; }
         .modal-content { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #475569; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
         
-        /* Animação suave para quando clicar em editar */
+        /* Animação suave */
         .highlight { animation: highlightPulse 1s; }
         @keyframes highlightPulse { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
     </style>
@@ -42,7 +42,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
         // ==========================================================
         // ⚠️ COLE SUAS CHAVES ABAIXO
@@ -60,8 +60,8 @@
         let erroConfig = null;
 
         try {
-            if (!SUPABASE_URL || SUPABASE_URL.includes("SEU_ID")) throw new Error("ERRO: Configure a URL do Supabase na linha 61.");
-            if (!SUPABASE_KEY || SUPABASE_KEY.includes("SUA_KEY")) throw new Error("ERRO: Configure a CHAVE do Supabase na linha 64.");
+            if (!SUPABASE_URL || SUPABASE_URL.includes("SEU_ID")) throw new Error("ERRO: Configure a URL do Supabase na linha 62.");
+            if (!SUPABASE_KEY || SUPABASE_KEY.includes("SUA_KEY")) throw new Error("ERRO: Configure a CHAVE do Supabase na linha 65.");
             client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         } catch (err) {
             erroConfig = err.message;
@@ -72,10 +72,10 @@
             return <i data-lucide={name} style={{ width: size, height: size }}></i>;
         };
 
-        // --- MÓDULO 1: ESTOQUE (Com Edição) ---
+        // --- MÓDULO 1: ESTOQUE ---
         const ModuloEstoque = () => {
             const [items, setItems] = useState([]);
-            const [editando, setEditando] = useState(null); // Estado para controlar edição
+            const [editando, setEditando] = useState(null);
             const [form, setForm] = useState({ nome: '', unidade_medida: 'G', categoria: 'ingrediente', preco_embalagem: '', tamanho_embalagem: '' });
 
             useEffect(() => { carregar(); }, []);
@@ -83,17 +83,9 @@
 
             function prepararEdicao(item) {
                 setEditando(item.id);
-                // Calcula de volta o preço da embalagem aproximado para facilitar a edição
-                // (Custo atual * tamanho)
-                const precoEstimado = (Number(item.custo_atual) * 1000).toFixed(2); // Valor simbólico caso não tenha o tamanho salvo, mas o usuário ajusta
-                
-                // Como não salvamos tamanho_embalagem no banco, o usuário terá que redigitar para recalcular o custo, é mais seguro.
                 setForm({ 
-                    nome: item.nome, 
-                    categoria: item.categoria, 
-                    unidade_medida: item.unidade_medida, 
-                    preco_embalagem: '', // Força o usuário a redigitar para garantir cálculo novo
-                    tamanho_embalagem: '' 
+                    nome: item.nome, categoria: item.categoria, unidade_medida: item.unidade_medida, 
+                    preco_embalagem: '', tamanho_embalagem: '' 
                 });
                 window.scrollTo(0,0);
             }
@@ -104,48 +96,31 @@
             }
 
             async function salvar() {
-                if (!form.nome || !form.preco_embalagem || !form.tamanho_embalagem) return alert("Preencha todos os campos para recalcular o custo!");
+                if (!form.nome || !form.preco_embalagem || !form.tamanho_embalagem) return alert("Preencha todos os campos!");
                 const custoCalculado = Number(form.preco_embalagem) / Number(form.tamanho_embalagem);
-                
-                const payload = { 
-                    nome: form.nome, 
-                    categoria: form.categoria, 
-                    unidade_medida: form.unidade_medida, 
-                    custo_atual: custoCalculado 
-                };
+                const payload = { nome: form.nome, categoria: form.categoria, unidade_medida: form.unidade_medida, custo_atual: custoCalculado };
 
-                if (editando) {
-                    await client.from('insumos').update(payload).eq('id', editando);
-                    alert("Item atualizado com sucesso!");
-                } else {
-                    await client.from('insumos').insert([payload]);
-                }
-                
-                cancelarEdicao();
-                carregar();
+                if (editando) { await client.from('insumos').update(payload).eq('id', editando); alert("Atualizado!"); } 
+                else { await client.from('insumos').insert([payload]); }
+                cancelarEdicao(); carregar();
             }
             async function excluir(id) { if (confirm("Apagar?")) { await client.from('insumos').delete().eq('id', id); carregar(); } }
 
             return (
-                <div className="space-y-6 animate-fade">
+                <div className="space-y-6">
                     <h2 className="text-2xl font-bold text-white mb-4">Estoque & Insumos</h2>
                     <div className={`card ${editando ? 'border-orange-500 border-2' : ''}`}>
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold text-white">{editando ? '✏️ Editando Item' : 'Novo Item'}</h3>
-                            {editando && <button onClick={cancelarEdicao} className="text-xs text-red-400 underline">Cancelar Edição</button>}
-                        </div>
+                        <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white">{editando ? '✏️ Editando' : 'Novo Item'}</h3>{editando && <button onClick={cancelarEdicao} className="text-red-400 text-xs">Cancelar</button>}</div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div><label className="text-sm text-slate-400">Nome</label><input value={form.nome} onChange={e=>setForm({...form, nome:e.target.value})} placeholder="Ex: Leite em Pó" /></div>
-                            <div><label className="text-sm text-slate-400">Categoria</label><select value={form.categoria} onChange={e=>setForm({...form, categoria:e.target.value})}><option value="ingrediente">Ingrediente</option><option value="embalagem">Embalagem</option></select></div>
-                            <div><label className="text-sm text-slate-400">Preço Pago (R$)</label><input type="number" value={form.preco_embalagem} onChange={e=>setForm({...form, preco_embalagem:e.target.value})} placeholder={editando ? "Redigite o valor pago" : "Ex: 85.00"} /></div>
+                            <div><label className="text-xs text-slate-400">Nome</label><input value={form.nome} onChange={e=>setForm({...form, nome:e.target.value})} /></div>
+                            <div><label className="text-xs text-slate-400">Categoria</label><select value={form.categoria} onChange={e=>setForm({...form, categoria:e.target.value})}><option value="ingrediente">Ingrediente</option><option value="embalagem">Embalagem</option></select></div>
+                            <div><label className="text-xs text-slate-400">Preço Pago (R$)</label><input type="number" value={form.preco_embalagem} onChange={e=>setForm({...form, preco_embalagem:e.target.value})} /></div>
                             <div className="flex gap-2">
-                                <div className="flex-1"><label className="text-sm text-slate-400">Qtd Total</label><input type="number" value={form.tamanho_embalagem} onChange={e=>setForm({...form, tamanho_embalagem:e.target.value})} placeholder={editando ? "Redigite o peso total" : "Ex: 7000"} /></div>
-                                <div className="w-1/3"><label className="text-sm text-slate-400">Unid</label><select value={form.unidade_medida} onChange={e=>setForm({...form, unidade_medida:e.target.value})}><option value="G">G</option><option value="ML">ML</option><option value="UN">UN</option></select></div>
+                                <div className="flex-1"><label className="text-xs text-slate-400">Qtd Total</label><input type="number" value={form.tamanho_embalagem} onChange={e=>setForm({...form, tamanho_embalagem:e.target.value})} /></div>
+                                <div className="w-1/3"><label className="text-xs text-slate-400">Unid</label><select value={form.unidade_medida} onChange={e=>setForm({...form, unidade_medida:e.target.value})}><option value="G">G</option><option value="ML">ML</option><option value="UN">UN</option></select></div>
                             </div>
                         </div>
-                        <button onClick={salvar} className={editando ? "btn-warning" : "btn-primary"}>
-                            {editando ? 'Atualizar Item' : 'Salvar Item'}
-                        </button>
+                        <button onClick={salvar} className={editando ? "btn-warning" : "btn-primary"}>{editando ? 'Atualizar' : 'Salvar'}</button>
                     </div>
                     <div className="card overflow-x-auto">
                         <table className="w-full text-left text-sm text-slate-300">
@@ -153,11 +128,11 @@
                             <tbody>
                                 {items.map(i => (
                                     <tr key={i.id} className="border-b border-slate-700/50">
-                                        <td className="p-3 font-bold text-white">{i.nome}</td>
+                                        <td className="p-3 text-white">{i.nome}</td>
                                         <td className="p-3 text-green-400">R$ {Number(i.custo_atual).toFixed(4)} / {i.unidade_medida}</td>
                                         <td className="p-3 text-right flex justify-end gap-3">
-                                            <button onClick={()=>prepararEdicao(i)} className="text-blue-400 hover:text-white"><Icon name="pencil" size={18}/></button>
-                                            <button onClick={()=>excluir(i.id)} className="text-red-400 hover:text-red-300"><Icon name="trash-2" size={18}/></button>
+                                            <button onClick={()=>prepararEdicao(i)} className="text-blue-400"><Icon name="pencil" size={18}/></button>
+                                            <button onClick={()=>excluir(i.id)} className="text-red-400"><Icon name="trash-2" size={18}/></button>
                                         </td>
                                     </tr>
                                 ))}
@@ -168,7 +143,7 @@
             );
         };
 
-        // --- MÓDULO 2: MEUS PRODUTOS (Edição de Nome já existia, ajustado) ---
+        // --- MÓDULO 2: MEUS PRODUTOS ---
         const ModuloProdutos = () => {
             const [produtos, setProdutos] = useState([]);
             const [nomeNovo, setNomeNovo] = useState('');
@@ -176,26 +151,9 @@
 
             useEffect(() => { carregar(); }, []);
             async function carregar() { const { data } = await client.from('produtos').select('*').order('created_at'); if(data) setProdutos(data); }
-            
-            async function criar() {
-                if(!nomeNovo) return alert("Digite um nome!");
-                await client.from('produtos').insert([{ nome: nomeNovo, preco_base: 0 }]);
-                setNomeNovo(''); carregar();
-            }
-
-            async function excluirProduto(id) {
-                if(confirm("Isso apagará o produto e a receita. Continuar?")) {
-                    await client.from('produtos').delete().eq('id', id);
-                    carregar();
-                }
-            }
-
-            async function salvarEdicao() {
-                if(!produtoEdit || !produtoEdit.nome) return;
-                await client.from('produtos').update({ nome: produtoEdit.nome }).eq('id', produtoEdit.id);
-                setProdutoEdit(null);
-                carregar();
-            }
+            async function criar() { if(!nomeNovo) return; await client.from('produtos').insert([{ nome: nomeNovo, preco_base: 0 }]); setNomeNovo(''); carregar(); }
+            async function excluirProduto(id) { if(confirm("Apagar produto?")) { await client.from('produtos').delete().eq('id', id); carregar(); } }
+            async function salvarEdicao() { if(!produtoEdit?.nome) return; await client.from('produtos').update({ nome: produtoEdit.nome }).eq('id', produtoEdit.id); setProdutoEdit(null); carregar(); }
 
             const DetalheReceita = ({ produto }) => {
                 const [itens, setItens] = useState([]);
@@ -206,40 +164,24 @@
                 useEffect(() => { loadItens(); loadInsumos(); }, []);
                 async function loadInsumos() { const {data} = await client.from('insumos').select('*').order('nome'); if(data) setInsumos(data); }
                 async function loadItens() { const {data} = await client.from('itens_receita').select('*, insumos(*)').eq('produto_id', produto.id); if(data) setItens(data); }
-                
-                async function adicionar() {
-                    if(!addId || !addQtd) return;
-                    await client.from('itens_receita').insert([{ produto_id: produto.id, insumo_id: addId, quantidade: addQtd }]);
-                    setAddQtd(''); loadItens();
-                }
+                async function adicionar() { if(!addId || !addQtd) return; await client.from('itens_receita').insert([{ produto_id: produto.id, insumo_id: addId, quantidade: addQtd }]); setAddQtd(''); loadItens(); }
                 async function remover(id) { await client.from('itens_receita').delete().eq('id', id); loadItens(); }
-
                 const custoTotal = itens.reduce((acc, i) => acc + (Number(i.quantidade) * Number(i.insumos?.custo_atual||0)), 0);
 
                 return (
                     <div className="mt-4 bg-slate-900 p-4 rounded border border-slate-700">
-                        <p className="text-xs text-slate-400 mb-2 uppercase font-bold">Ingredientes:</p>
                         {itens.map(i => (
                             <div key={i.id} className="flex justify-between text-sm mb-2 border-b border-slate-800 pb-1">
                                 <span>{i.insumos?.nome} ({Number(i.quantidade)} {i.insumos?.unidade_medida})</span>
-                                <div className="flex gap-4">
-                                    <span className="text-green-400 font-mono">R$ {(Number(i.quantidade)*Number(i.insumos?.custo_atual)).toFixed(2)}</span>
-                                    <button onClick={()=>remover(i.id)} className="text-red-500 font-bold">X</button>
-                                </div>
+                                <div className="flex gap-4"><span className="text-green-400 font-mono">R$ {(Number(i.quantidade)*Number(i.insumos?.custo_atual)).toFixed(2)}</span><button onClick={()=>remover(i.id)} className="text-red-500 font-bold">X</button></div>
                             </div>
                         ))}
                         <div className="flex gap-2 mt-4">
-                            <select value={addId} onChange={e=>setAddId(e.target.value)} className="text-sm flex-1">
-                                <option value="">+ Adicionar Item...</option>
-                                {insumos.map(i=><option key={i.id} value={i.id}>{i.nome}</option>)}
-                            </select>
+                            <select value={addId} onChange={e=>setAddId(e.target.value)} className="text-sm flex-1"><option value="">+ Item...</option>{insumos.map(i=><option key={i.id} value={i.id}>{i.nome}</option>)}</select>
                             <input type="number" placeholder="Qtd" value={addQtd} onChange={e=>setAddQtd(e.target.value)} className="w-20 text-sm" />
                             <button onClick={adicionar} className="bg-green-600 px-3 rounded text-white font-bold">+</button>
                         </div>
-                        <div className="mt-4 pt-3 border-t border-slate-700 flex justify-between items-center">
-                            <span className="text-slate-400">Custo Total (CMV):</span>
-                            <span className="text-xl font-bold text-green-400">R$ {custoTotal.toFixed(2)}</span>
-                        </div>
+                        <div className="mt-4 pt-3 border-t border-slate-700 flex justify-between items-center"><span className="text-slate-400">Custo Total (CMV):</span><span className="text-xl font-bold text-green-400">R$ {custoTotal.toFixed(2)}</span></div>
                     </div>
                 );
             };
@@ -247,42 +189,21 @@
             return (
                 <div className="space-y-6">
                     <h2 className="text-2xl font-bold text-white mb-4">Engenharia de Cardápio</h2>
-                    <div className="card flex gap-2">
-                        <input placeholder="Nome do Produto (Ex: Copo 500ml)" value={nomeNovo} onChange={e=>setNomeNovo(e.target.value)} />
-                        <button onClick={criar} className="btn-primary w-auto whitespace-nowrap">Criar Produto</button>
-                    </div>
+                    <div className="card flex gap-2"><input placeholder="Nome do Produto" value={nomeNovo} onChange={e=>setNomeNovo(e.target.value)} /><button onClick={criar} className="btn-primary w-auto">Criar Produto</button></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {produtos.map(p => (
                             <div key={p.id} className="card relative">
-                                <div className="flex justify-between items-center mb-2">
-                                    <h3 className="font-bold text-lg text-white flex items-center gap-2"><Icon name="coffee" /> {p.nome}</h3>
-                                    <div className="flex gap-2">
-                                        <button onClick={()=>setProdutoEdit(p)} className="bg-slate-800 p-2 rounded hover:text-blue-400"><Icon name="pencil" size={16}/></button>
-                                        <button onClick={()=>excluirProduto(p.id)} className="bg-slate-800 p-2 rounded hover:text-red-400"><Icon name="trash-2" size={16}/></button>
-                                    </div>
-                                </div>
+                                <div className="flex justify-between items-center mb-2"><h3 className="font-bold text-lg text-white flex gap-2"><Icon name="coffee" /> {p.nome}</h3><div className="flex gap-2"><button onClick={()=>setProdutoEdit(p)} className="bg-slate-800 p-2 rounded text-blue-400"><Icon name="pencil" size={16}/></button><button onClick={()=>excluirProduto(p.id)} className="bg-slate-800 p-2 rounded text-red-400"><Icon name="trash-2" size={16}/></button></div></div>
                                 <DetalheReceita produto={p} />
                             </div>
                         ))}
                     </div>
-                    
-                    {produtoEdit && (
-                        <div className="modal-overlay">
-                            <div className="modal-content">
-                                <h3 className="text-xl font-bold text-white mb-4">Renomear Produto</h3>
-                                <input value={produtoEdit.nome} onChange={e=>setProdutoEdit({...produtoEdit, nome:e.target.value})} className="mb-4" />
-                                <div className="flex gap-2">
-                                    <button onClick={()=>setProdutoEdit(null)} className="btn-danger w-full">Cancelar</button>
-                                    <button onClick={salvarEdicao} className="btn-success w-full">Salvar</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {produtoEdit && <div className="modal-overlay"><div className="modal-content"><h3 className="text-xl font-bold text-white mb-4">Renomear</h3><input value={produtoEdit.nome} onChange={e=>setProdutoEdit({...produtoEdit, nome:e.target.value})} className="mb-4" /><div className="flex gap-2"><button onClick={()=>setProdutoEdit(null)} className="btn-danger w-full">Cancelar</button><button onClick={salvarEdicao} className="btn-success w-full">Salvar</button></div></div></div>}
                 </div>
             );
         };
 
-        // --- MÓDULO 3: PRECIFICAÇÃO (Config já é Edição) ---
+        // --- MÓDULO 3: PRECIFICAÇÃO ---
         const ModuloPrecificacao = () => {
             const [custoProd, setCustoProd] = useState('');
             const [lucro, setLucro] = useState(20);
@@ -292,18 +213,7 @@
 
             useEffect(() => { carregarCanais(); }, []);
             async function carregarCanais() { const { data } = await client.from('canais_venda').select('*'); if (data) setCanais(data); }
-
-            async function salvarCanal() {
-                if(!canalEdit) return;
-                await client.from('canais_venda').update({
-                    comissao_percentual: canalEdit.comissao_percentual,
-                    custo_frete_fixo: canalEdit.custo_frete_fixo,
-                    cupom_desconto_fixo: canalEdit.cupom_desconto_fixo,
-                    desconto_cliente_percentual: canalEdit.desconto_cliente_percentual
-                }).eq('id', canalEdit.id);
-                setCanalEdit(null);
-                carregarCanais();
-            }
+            async function salvarCanal() { if(!canalEdit) return; await client.from('canais_venda').update({ comissao_percentual: canalEdit.comissao_percentual, custo_frete_fixo: canalEdit.custo_frete_fixo, cupom_desconto_fixo: canalEdit.cupom_desconto_fixo, desconto_cliente_percentual: canalEdit.desconto_cliente_percentual }).eq('id', canalEdit.id); setCanalEdit(null); carregarCanais(); }
 
             const calcular = (canal) => {
                 const custoBase = Number(custoProd);
@@ -316,54 +226,25 @@
             return (
                 <div className="space-y-6">
                     <h2 className="text-2xl font-bold text-white mb-4">Simulador de Preços</h2>
-                    <div className="card bg-purple-900/20 border border-purple-500/50">
-                        <label className="text-sm text-purple-200 font-bold mb-2 block">1. Digite o Custo Total (CMV) do seu copo:</label>
-                        <input type="number" value={custoProd} onChange={e=>setCustoProd(e.target.value)} placeholder="Ex: 3.58" className="text-2xl font-bold text-purple-400 p-4" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                        <div className="card"><label className="text-slate-400 text-sm">Margem de Lucro (%)</label><input type="number" value={lucro} onChange={e=>setLucro(Number(e.target.value))} /></div>
-                        <div className="card"><label className="text-slate-400 text-sm">Imposto (%)</label><input type="number" value={imposto} onChange={e=>setImposto(Number(e.target.value))} /></div>
-                    </div>
-                    
+                    <div className="card bg-purple-900/20 border border-purple-500/50"><label className="text-sm text-purple-200 font-bold mb-2 block">1. Digite o Custo Total (CMV) do seu copo:</label><input type="number" value={custoProd} onChange={e=>setCustoProd(e.target.value)} placeholder="Ex: 3.58" className="text-2xl font-bold text-purple-400 p-4" /></div>
+                    <div className="grid grid-cols-2 gap-4 mb-6"><div className="card"><label className="text-slate-400 text-sm">Margem de Lucro (%)</label><input type="number" value={lucro} onChange={e=>setLucro(Number(e.target.value))} /></div><div className="card"><label className="text-slate-400 text-sm">Imposto (%)</label><input type="number" value={imposto} onChange={e=>setImposto(Number(e.target.value))} /></div></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {canais.map(c => {
                             const preco = calcular(c);
                             return (
                                 <div key={c.id} className="card border-l-4 border-l-purple-500 relative hover:bg-slate-800 transition">
-                                    <div className="flex justify-between items-start">
-                                        <h4 className="font-bold text-white text-lg">{c.nome}</h4>
-                                        <button onClick={()=>setCanalEdit(c)} className="text-xs bg-slate-700 px-3 py-1 rounded text-purple-300 hover:text-white flex gap-1 items-center">
-                                            <Icon name="settings" size={14} /> Configurar
-                                        </button>
-                                    </div>
-                                    {c.desconto_cliente_percentual > 0 && <div className="mt-2 inline-block bg-green-900/50 text-green-400 px-2 py-1 rounded text-xs font-bold border border-green-500/50">🏷️ Promoção: {c.desconto_cliente_percentual}% OFF</div>}
-                                    <div className="mt-3 text-xs text-slate-500 flex gap-2"><span>Taxa: {c.comissao_percentual}%</span><span>Frete: R$ {c.custo_frete_fixo}</span></div>
-                                    <div className="flex justify-between items-end mt-4 pt-4 border-t border-slate-700/50">
-                                        <div><span className="text-xs text-slate-400 block uppercase">Vender Por</span><span className="text-3xl font-bold text-white">R$ {preco.toFixed(2)}</span></div>
-                                        <div className="text-right"><span className="text-xs text-slate-400 block uppercase">Lucro Liq.</span><span className="text-xl font-bold text-green-400">R$ {(preco * (lucro/100)).toFixed(2)}</span></div>
-                                    </div>
+                                    <div className="flex justify-between items-start"><h4 className="font-bold text-white text-lg">{c.nome}</h4><button onClick={()=>setCanalEdit(c)} className="text-xs bg-slate-700 px-3 py-1 rounded text-purple-300 flex gap-1 items-center"><Icon name="settings" size={14} /> Config</button></div>
+                                    <div className="flex justify-between items-end mt-4 pt-4 border-t border-slate-700/50"><div><span className="text-xs text-slate-400 block uppercase">Vender Por</span><span className="text-3xl font-bold text-white">R$ {preco.toFixed(2)}</span></div><div className="text-right"><span className="text-xs text-slate-400 block uppercase">Lucro Liq.</span><span className="text-xl font-bold text-green-400">R$ {(preco * (lucro/100)).toFixed(2)}</span></div></div>
                                 </div>
                             )
                         })}
                     </div>
-                    {canalEdit && (
-                        <div className="modal-overlay">
-                            <div className="modal-content">
-                                <h3 className="text-xl font-bold text-white mb-4">Configurar {canalEdit.nome}</h3>
-                                <div className="space-y-4">
-                                    <div><label className="text-sm text-slate-400">Comissão do App (%)</label><input type="number" value={canalEdit.comissao_percentual} onChange={e=>setCanalEdit({...canalEdit, comissao_percentual: Number(e.target.value)})} /></div>
-                                    <div><label className="text-sm text-slate-400">Frete Fixo (R$)</label><input type="number" value={canalEdit.custo_frete_fixo} onChange={e=>setCanalEdit({...canalEdit, custo_frete_fixo: Number(e.target.value)})} /></div>
-                                    <div className="bg-green-900/20 p-3 rounded border border-green-900/50"><label className="text-sm text-green-400 font-bold">Desconto Promocional (%)</label><input type="number" value={canalEdit.desconto_cliente_percentual} onChange={e=>setCanalEdit({...canalEdit, desconto_cliente_percentual: Number(e.target.value)})} /></div>
-                                </div>
-                                <div className="flex gap-2 mt-6"><button onClick={()=>setCanalEdit(null)} className="btn-danger w-full">Cancelar</button><button onClick={salvarCanal} className="btn-success w-full">Salvar</button></div>
-                            </div>
-                        </div>
-                    )}
+                    {canalEdit && <div className="modal-overlay"><div className="modal-content"><h3 className="text-xl font-bold text-white mb-4">Configurar {canalEdit.nome}</h3><div className="space-y-4"><div><label className="text-sm text-slate-400">Taxa App (%)</label><input type="number" value={canalEdit.comissao_percentual} onChange={e=>setCanalEdit({...canalEdit, comissao_percentual: Number(e.target.value)})} /></div><div><label className="text-sm text-slate-400">Frete Fixo (R$)</label><input type="number" value={canalEdit.custo_frete_fixo} onChange={e=>setCanalEdit({...canalEdit, custo_frete_fixo: Number(e.target.value)})} /></div><div><label className="text-sm text-slate-400">Desconto Cliente (%)</label><input type="number" value={canalEdit.desconto_cliente_percentual} onChange={e=>setCanalEdit({...canalEdit, desconto_cliente_percentual: Number(e.target.value)})} /></div></div><div className="flex gap-2 mt-6"><button onClick={()=>setCanalEdit(null)} className="btn-danger w-full">Cancelar</button><button onClick={salvarCanal} className="btn-success w-full">Salvar</button></div></div></div>}
                 </div>
             );
         };
 
-        // --- MÓDULO 4: CUSTOS FIXOS (Com Edição e Metas Duplas) ---
+        // --- MÓDULO 4: CUSTOS FIXOS ---
         const ModuloCustos = () => {
             const [custos, setCustos] = useState([]);
             const [novo, setNovo] = useState({ nome: '', valor: '' });
@@ -371,25 +252,13 @@
 
             useEffect(() => { load(); }, []);
             async function load() { const {data} = await client.from('custos_fixos').select('*'); if(data) setCustos(data); }
-            
             async function salvar() { 
                 if(!novo.nome || !novo.valor) return; 
-                
-                if (editando) {
-                    await client.from('custos_fixos').update(novo).eq('id', editando);
-                    setEditando(null);
-                } else {
-                    await client.from('custos_fixos').insert([novo]); 
-                }
-                setNovo({nome:'', valor:''}); 
-                load(); 
+                if (editando) { await client.from('custos_fixos').update(novo).eq('id', editando); setEditando(null); } 
+                else { await client.from('custos_fixos').insert([novo]); }
+                setNovo({nome:'', valor:''}); load(); 
             }
-            
-            function prepararEdicao(item) {
-                setNovo({ nome: item.nome, valor: item.valor });
-                setEditando(item.id);
-            }
-
+            function prepararEdicao(item) { setNovo({ nome: item.nome, valor: item.valor }); setEditando(item.id); }
             async function del(id) { await client.from('custos_fixos').delete().eq('id', id); load(); }
             const total = custos.reduce((acc, i) => acc + Number(i.valor), 0);
 
@@ -398,55 +267,15 @@
                     <h2 className="text-2xl font-bold text-white mb-4">Custos Fixos Mensais</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className={`card ${editando ? 'border-orange-500 border-2' : ''}`}>
-                            <div className="flex gap-2 mb-4 items-end">
-                                <div className="flex-1">
-                                    <label className="text-xs text-slate-400 mb-1 block">Descrição</label>
-                                    <input placeholder="Ex: Aluguel" value={novo.nome} onChange={e=>setNovo({...novo, nome:e.target.value})} className="mb-0" />
-                                </div>
-                                <div className="w-32">
-                                    <label className="text-xs text-slate-400 mb-1 block">Valor (R$)</label>
-                                    <input type="number" placeholder="0.00" value={novo.valor} onChange={e=>setNovo({...novo, valor:e.target.value})} className="mb-0" />
-                                </div>
-                                <button onClick={salvar} className={`mb-0 px-4 py-2 rounded font-bold text-white ${editando ? 'bg-orange-500' : 'bg-purple-600'}`}>
-                                    {editando ? 'OK' : 'Add'}
-                                </button>
-                            </div>
+                            <div className="flex gap-2 mb-4 items-end"><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">Descrição</label><input placeholder="Ex: Aluguel" value={novo.nome} onChange={e=>setNovo({...novo, nome:e.target.value})} className="mb-0" /></div><div className="w-32"><label className="text-xs text-slate-400 mb-1 block">Valor (R$)</label><input type="number" placeholder="0.00" value={novo.valor} onChange={e=>setNovo({...novo, valor:e.target.value})} className="mb-0" /></div><button onClick={salvar} className={`mb-0 px-4 py-2 rounded font-bold text-white ${editando ? 'bg-orange-500' : 'bg-purple-600'}`}>{editando ? 'OK' : 'Add'}</button></div>
                             {editando && <p className="text-right text-xs text-orange-400 cursor-pointer mb-2" onClick={()=>{setEditando(null); setNovo({nome:'', valor:''})}}>Cancelar Edição</p>}
-                            <ul className="space-y-2 mt-4">
-                                {custos.map(c => (
-                                    <li key={c.id} className="flex justify-between items-center bg-slate-800 p-3 rounded border border-slate-700">
-                                        <span className="text-slate-300">{c.nome}</span>
-                                        <div className="flex items-center gap-4">
-                                            <span className="font-bold text-white">R$ {Number(c.valor).toFixed(2)}</span>
-                                            <div className="flex gap-2">
-                                                <button onClick={()=>prepararEdicao(c)} className="text-blue-400"><Icon name="pencil" size={16}/></button>
-                                                <button onClick={()=>del(c.id)} className="text-red-500"><Icon name="trash-2" size={16}/></button>
-                                            </div>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
+                            <ul className="space-y-2 mt-4">{custos.map(c => (<li key={c.id} className="flex justify-between items-center bg-slate-800 p-3 rounded border border-slate-700"><span className="text-slate-300">{c.nome}</span><div className="flex items-center gap-4"><span className="font-bold text-white">R$ {Number(c.valor).toFixed(2)}</span><div className="flex gap-2"><button onClick={()=>prepararEdicao(c)} className="text-blue-400"><Icon name="pencil" size={16}/></button><button onClick={()=>del(c.id)} className="text-red-500"><Icon name="trash-2" size={16}/></button></div></div></li>))}</ul>
                             <div className="mt-4 pt-4 border-t border-slate-600 text-right"><span className="text-slate-400 mr-2">Total Mensal:</span><span className="text-2xl font-bold text-white">R$ {total.toFixed(2)}</span></div>
                         </div>
-                        
-                        {/* PAINEL DUPLO DE METAS */}
                         <div className="card flex flex-col items-center justify-center text-center bg-gradient-to-b from-slate-800 to-slate-900 gap-4">
-                            <div className="p-4 bg-purple-900/30 rounded-full mb-2"><Icon name="target" size={40} className="text-purple-400" /></div>
-                            
                             <div className="w-full space-y-4">
-                                {/* Ponto de Equilíbrio */}
-                                <div className="bg-slate-950 p-4 rounded-xl border border-yellow-900/50 w-full">
-                                    <p className="text-xs text-yellow-500 uppercase font-bold tracking-wider">⚖️ Ponto de Equilíbrio (Zero a Zero)</p>
-                                    <p className="text-2xl font-bold text-yellow-400 mt-1">R$ {(total / 0.40).toFixed(2)}</p>
-                                    <p className="text-[10px] text-slate-500 mt-1">Mínimo para pagar fornecedores e contas.</p>
-                                </div>
-
-                                {/* Meta de Ouro */}
-                                <div className="bg-slate-950 p-4 rounded-xl border border-green-900/50 w-full">
-                                    <p className="text-xs text-green-500 uppercase font-bold tracking-wider">🚀 Meta Ideal (Lucro Real)</p>
-                                    <p className="text-3xl font-bold text-green-400 mt-1">R$ {(total / 0.20).toFixed(2)}</p>
-                                    <p className="text-[10px] text-slate-500 mt-1">Empresa saudável e crescendo.</p>
-                                </div>
+                                <div className="bg-slate-950 p-4 rounded-xl border border-yellow-900/50 w-full"><p className="text-xs text-yellow-500 uppercase font-bold tracking-wider">⚖️ Ponto de Equilíbrio (Zero a Zero)</p><p className="text-2xl font-bold text-yellow-400 mt-1">R$ {(total / 0.40).toFixed(2)}</p></div>
+                                <div className="bg-slate-950 p-4 rounded-xl border border-green-900/50 w-full"><p className="text-xs text-green-500 uppercase font-bold tracking-wider">🚀 Meta Ideal (Lucro Real)</p><p className="text-3xl font-bold text-green-400 mt-1">R$ {(total / 0.20).toFixed(2)}</p></div>
                             </div>
                         </div>
                     </div>
@@ -454,122 +283,208 @@
             );
         };
 
-        // --- MÓDULO 5: FLUXO DE CAIXA (Com Edição) ---
+        // --- MÓDULO 5: FLUXO DE CAIXA ---
         const ModuloFluxo = () => {
             const [movs, setMovs] = useState([]);
             const [canais, setCanais] = useState([]);
             const [editando, setEditando] = useState(null);
-            
-            const [form, setForm] = useState({ 
-                tipo: 'receita', descricao: '', valor: '', data_movimento: new Date().toISOString().split('T')[0], canal_venda_id: '', categoria: 'Vendas' 
-            });
+            const [form, setForm] = useState({ tipo: 'receita', descricao: '', valor: '', data_movimento: new Date().toISOString().split('T')[0], canal_venda_id: '', categoria: 'Vendas' });
             
             useEffect(() => { load(); loadCanais(); }, []);
             async function loadCanais() { const {data} = await client.from('canais_venda').select('*'); if(data) setCanais(data); }
             async function load() { const {data} = await client.from('fluxo_caixa').select('*, canais_venda(nome)').order('data_movimento', {ascending: false}); if(data) setMovs(data); }
             
-            function prepararEdicao(item) {
-                setEditando(item.id);
-                setForm({
-                    tipo: item.tipo,
-                    descricao: item.descricao,
-                    valor: item.valor,
-                    data_movimento: item.data_movimento,
-                    canal_venda_id: item.canal_venda_id || '',
-                    categoria: item.categoria || 'Vendas'
-                });
-                window.scrollTo(0, 0); // Sobe a tela para o formulário
-            }
-
-            function cancelarEdicao() {
-                setEditando(null);
-                setForm({ tipo: 'receita', descricao: '', valor: '', data_movimento: new Date().toISOString().split('T')[0], canal_venda_id: '', categoria: 'Vendas' });
-            }
+            function prepararEdicao(item) { setEditando(item.id); setForm({ tipo: item.tipo, descricao: item.descricao, valor: item.valor, data_movimento: item.data_movimento, canal_venda_id: item.canal_venda_id || '', categoria: item.categoria || 'Vendas' }); window.scrollTo(0, 0); }
+            function cancelarEdicao() { setEditando(null); setForm({ tipo: 'receita', descricao: '', valor: '', data_movimento: new Date().toISOString().split('T')[0], canal_venda_id: '', categoria: 'Vendas' }); }
 
             async function salvar() {
-                if (!form.data_movimento || !form.descricao || !form.valor || !form.categoria) return alert("Preencha Data, Categoria, Descrição e Valor!");
-
+                if (!form.data_movimento || !form.descricao || !form.valor || !form.categoria) return alert("Preencha tudo!");
                 const payload = { ...form, canal_venda_id: form.tipo === 'receita' ? form.canal_venda_id : null };
                 if (!payload.canal_venda_id) delete payload.canal_venda_id; 
-                
-                if (editando) {
-                    const { error } = await client.from('fluxo_caixa').update(payload).eq('id', editando);
-                    if (error) alert("Erro: " + error.message);
-                    else { alert("Lançamento corrigido!"); cancelarEdicao(); load(); }
-                } else {
-                    const { error } = await client.from('fluxo_caixa').insert([payload]);
-                    if (error) alert("Erro: " + error.message);
-                    else { setForm(prev => ({ ...prev, descricao: '', valor: '' })); load(); }
-                }
+                if (editando) { await client.from('fluxo_caixa').update(payload).eq('id', editando); alert("Corrigido!"); cancelarEdicao(); load(); } 
+                else { await client.from('fluxo_caixa').insert([payload]); setForm(prev => ({ ...prev, descricao: '', valor: '' })); load(); }
             }
-
-            async function excluir(id) {
-                if(confirm("Deseja realmente apagar este lançamento?")) {
-                    await client.from('fluxo_caixa').delete().eq('id', id);
-                    load();
-                }
-            }
-
-            const totais = movs.reduce((acc, m) => {
-                const val = Number(m.valor);
-                if (m.tipo === 'receita' || m.tipo === 'entrada') acc.entradas += val; else acc.saidas += val;
-                return acc;
-            }, { entradas: 0, saidas: 0 });
+            async function excluir(id) { if(confirm("Apagar?")) { await client.from('fluxo_caixa').delete().eq('id', id); load(); } }
+            const totais = movs.reduce((acc, m) => { const val = Number(m.valor); if (m.tipo === 'receita') acc.entradas += val; else acc.saidas += val; return acc; }, { entradas: 0, saidas: 0 });
 
             return (
                 <div className="space-y-6">
                     <h2 className="text-2xl font-bold text-white mb-4">Fluxo de Caixa</h2>
-                    <div className="grid grid-cols-3 gap-4 mb-6">
-                        <div className="card border-l-4 border-green-500"><p className="text-xs text-slate-400">ENTRADAS</p><p className="text-2xl font-bold text-green-400">R$ {totais.entradas.toFixed(2)}</p></div>
-                        <div className="card border-l-4 border-red-500"><p className="text-xs text-slate-400">SAÍDAS</p><p className="text-2xl font-bold text-red-400">R$ {totais.saidas.toFixed(2)}</p></div>
-                        <div className="card border-l-4 border-blue-500"><p className="text-xs text-slate-400">SALDO</p><p className={`text-2xl font-bold ${totais.entradas-totais.saidas>=0?'text-blue-400':'text-red-400'}`}>R$ {(totais.entradas - totais.saidas).toFixed(2)}</p></div>
-                    </div>
-                    
+                    <div className="grid grid-cols-3 gap-4 mb-6"><div className="card border-l-4 border-green-500"><p className="text-xs text-slate-400">ENTRADAS</p><p className="text-2xl font-bold text-green-400">R$ {totais.entradas.toFixed(2)}</p></div><div className="card border-l-4 border-red-500"><p className="text-xs text-slate-400">SAÍDAS</p><p className="text-2xl font-bold text-red-400">R$ {totais.saidas.toFixed(2)}</p></div><div className="card border-l-4 border-blue-500"><p className="text-xs text-slate-400">SALDO</p><p className={`text-2xl font-bold ${totais.entradas-totais.saidas>=0?'text-blue-400':'text-red-400'}`}>R$ {(totais.entradas - totais.saidas).toFixed(2)}</p></div></div>
                     <div className={`card border border-slate-600 ${editando ? 'border-orange-500 border-2' : ''}`}>
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold text-white flex items-center gap-2">
-                                <Icon name={editando ? "pencil" : "plus-circle"} /> {editando ? "Editando Lançamento" : "Novo Lançamento"}
-                            </h3>
-                            {editando && <button onClick={cancelarEdicao} className="text-red-400 text-sm underline">Cancelar</button>}
-                        </div>
+                        <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white flex items-center gap-2"><Icon name={editando ? "pencil" : "plus-circle"} /> {editando ? "Editando" : "Novo Lançamento"}</h3>{editando && <button onClick={cancelarEdicao} className="text-red-400 text-sm underline">Cancelar</button>}</div>
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                             <select value={form.tipo} onChange={e=>setForm({...form, tipo:e.target.value})} className="font-bold"><option value="receita">Receita (+)</option><option value="despesa">Despesa (-)</option></select>
                             <input type="date" value={form.data_movimento} onChange={e=>setForm({...form, data_movimento:e.target.value})} />
-                            <select value={form.categoria} onChange={e=>setForm({...form, categoria:e.target.value})}>
-                                <option value="Vendas">Vendas</option><option value="Insumos">Insumos</option><option value="Operacional">Operacional</option><option value="Pessoal">Pessoal</option><option value="Outros">Outros</option>
-                            </select>
+                            <select value={form.categoria} onChange={e=>setForm({...form, categoria:e.target.value})}><option value="Vendas">Vendas</option><option value="Insumos">Insumos</option><option value="Operacional">Operacional</option><option value="Pessoal">Pessoal</option><option value="Outros">Outros</option></select>
                             <input placeholder="Descrição" value={form.descricao} onChange={e=>setForm({...form, descricao:e.target.value})} className="md:col-span-1" />
-                            {form.tipo === 'receita' ? (
-                                <select value={form.canal_venda_id} onChange={e=>setForm({...form, canal_venda_id:e.target.value})}><option value="">Canal...</option>{canais.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}</select>
-                            ) : (<input disabled placeholder="-" className="opacity-50" />)}
+                            {form.tipo === 'receita' ? (<select value={form.canal_venda_id} onChange={e=>setForm({...form, canal_venda_id:e.target.value})}><option value="">Canal...</option>{canais.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}</select>) : (<input disabled placeholder="-" className="opacity-50" />)}
                             <input type="number" placeholder="Valor" value={form.valor} onChange={e=>setForm({...form, valor:e.target.value})} />
                         </div>
-                        <button onClick={salvar} className={`w-full mt-2 font-bold py-3 rounded ${editando ? 'btn-warning' : 'btn-success'}`}>
-                            {editando ? 'ATUALIZAR LANÇAMENTO' : 'LANÇAR'}
-                        </button>
+                        <button onClick={salvar} className={`w-full mt-2 font-bold py-3 rounded ${editando ? 'btn-warning' : 'btn-success'}`}>{editando ? 'ATUALIZAR' : 'LANÇAR'}</button>
                     </div>
+                    <div className="card overflow-x-auto"><table className="w-full text-left text-sm text-slate-300"><thead><tr className="border-b border-slate-600"><th className="p-3">Data</th><th className="p-3">Desc</th><th className="p-3">Categ</th><th className="p-3">Valor</th><th className="p-3 text-right">Ações</th></tr></thead><tbody>{movs.map(m => (<tr key={m.id} className="border-b border-slate-700/50"><td className="p-3">{new Date(m.data_movimento).toLocaleDateString('pt-BR',{timeZone:'UTC'})}</td><td className="p-3 text-white">{m.descricao}</td><td className="p-3 text-xs uppercase">{m.categoria}</td><td className={`p-3 font-bold ${m.tipo==='receita'?'text-green-400':'text-red-400'}`}>{m.tipo==='receita'?'+':'-'} {Number(m.valor).toFixed(2)}</td><td className="p-3 text-right flex justify-end gap-3"><button onClick={()=>prepararEdicao(m)} className="text-blue-400"><Icon name="pencil" size={16}/></button><button onClick={()=>excluir(m.id)} className="text-red-400"><Icon name="trash-2" size={16}/></button></td></tr>))}</tbody></table></div>
+                </div>
+            );
+        };
 
-                    <div className="card overflow-x-auto">
-                        <table className="w-full text-left text-sm text-slate-300">
-                            <thead><tr className="border-b border-slate-600"><th className="p-3">Data</th><th className="p-3">Desc</th><th className="p-3">Categ.</th><th className="p-3">Canal</th><th className="p-3 text-right">Valor</th><th className="p-3 text-right">Ações</th></tr></thead>
-                            <tbody>
-                                {movs.map(m => (
-                                    <tr key={m.id} className="border-b border-slate-700/50 hover:bg-slate-800 transition">
-                                        <td className="p-3">{new Date(m.data_movimento).toLocaleDateString('pt-BR',{timeZone:'UTC'})}</td>
-                                        <td className="p-3 font-medium text-white">{m.descricao}</td>
-                                        <td className="p-3 text-xs uppercase bg-slate-800 rounded px-2">{m.categoria || '-'}</td>
-                                        <td className="p-3 text-xs uppercase text-slate-400">{m.canais_venda?.nome || '-'}</td>
-                                        <td className={`p-3 text-right font-bold ${m.tipo==='receita'||m.tipo==='entrada'?'text-green-400':'text-red-400'}`}>
-                                            {m.tipo==='receita'||m.tipo==='entrada'?'+':'-'} R$ {Number(m.valor).toFixed(2)}
-                                        </td>
-                                        <td className="p-3 text-right flex justify-end gap-3">
-                                            <button onClick={()=>prepararEdicao(m)} className="text-blue-400 hover:text-white"><Icon name="pencil" size={18}/></button>
-                                            <button onClick={()=>excluir(m.id)} className="text-red-400 hover:text-red-300"><Icon name="trash-2" size={18}/></button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+        // --- MÓDULO 6: COMBOS (CORRIGIDO) ---
+        const ModuloCombos = () => {
+            const [combos, setCombos] = useState([]);
+            const [produtos, setProdutos] = useState([]);
+            const [custosPorProduto, setCustosPorProduto] = useState({});
+            
+            // Controle de Edição/Criação
+            const [editandoId, setEditandoId] = useState(null);
+            const [formNome, setFormNome] = useState('');
+            const [formPreco, setFormPreco] = useState('');
+            const [itensCombo, setItensCombo] = useState([]); 
+
+            useEffect(() => { carregarDados(); }, []);
+
+            async function carregarDados() {
+                const { data: c } = await client.from('combos').select('*').order('created_at');
+                if (c) setCombos(c);
+                const { data: p } = await client.from('produtos').select('*');
+                if (p) setProdutos(p);
+                
+                // Mágica para calcular custo de cada produto
+                const { data: receitas } = await client.from('itens_receita').select('*, insumos(*)');
+                if (receitas && p) {
+                    const mapaCustos = {};
+                    p.forEach(prod => {
+                        const receitaDoProd = receitas.filter(r => r.produto_id === prod.id);
+                        const custo = receitaDoProd.reduce((acc, r) => acc + (Number(r.quantidade) * Number(r.insumos?.custo_atual || 0)), 0);
+                        mapaCustos[prod.id] = custo;
+                    });
+                    setCustosPorProduto(mapaCustos);
+                }
+            }
+
+            async function abrirEditor(combo) {
+                if (combo) {
+                    setEditandoId(combo.id);
+                    setFormNome(combo.nome);
+                    setFormPreco(combo.preco_venda);
+                    const { data } = await client.from('itens_combo').select('*').eq('combo_id', combo.id);
+                    setItensCombo(data || []);
+                } else {
+                    setEditandoId('NOVO');
+                    setFormNome('');
+                    setFormPreco('');
+                    setItensCombo([]);
+                }
+            }
+
+            function adicionarItemNoCombo(prodId) {
+                if (!prodId) return;
+                // CORREÇÃO AQUI: Removemos o Number() pois o ID agora é texto (UUID)
+                setItensCombo([...itensCombo, { produto_id: prodId, quantidade: 1, tempId: Date.now() }]);
+            }
+
+            function removerItemDoCombo(index) {
+                const novaLista = [...itensCombo];
+                novaLista.splice(index, 1);
+                setItensCombo(novaLista);
+            }
+
+            async function salvarCombo() {
+                if (!formNome || !formPreco) return alert("Preencha nome e preço!");
+                
+                let comboId = editandoId;
+
+                // 1. Salvar ou Criar o Combo Pai
+                if (editandoId === 'NOVO') {
+                    const { data, error } = await client.from('combos').insert([{ nome: formNome, preco_venda: formPreco }]).select();
+                    if (error) return alert("Erro ao criar combo: " + error.message);
+                    comboId = data[0].id;
+                } else {
+                    await client.from('combos').update({ nome: formNome, preco_venda: formPreco }).eq('id', comboId);
+                    await client.from('itens_combo').delete().eq('combo_id', comboId);
+                }
+
+                // 2. Salvar os Itens
+                const itensParaSalvar = itensCombo.map(i => ({ combo_id: comboId, produto_id: i.produto_id, quantidade: 1 }));
+                if (itensParaSalvar.length > 0) {
+                    const { error } = await client.from('itens_combo').insert(itensParaSalvar);
+                    if(error) console.log(error);
+                }
+
+                setEditandoId(null);
+                carregarDados();
+            }
+
+            async function excluirCombo(id) {
+                if(confirm("Apagar este combo?")) {
+                    await client.from('combos').delete().eq('id', id);
+                    carregarDados();
+                }
+            }
+
+            const custoTotalCombo = itensCombo.reduce((acc, item) => acc + (custosPorProduto[item.produto_id] || 0), 0);
+            const lucro = Number(formPreco) - custoTotalCombo;
+            const margem = Number(formPreco) > 0 ? (lucro / Number(formPreco)) * 100 : 0;
+
+            if (editandoId) {
+                return (
+                    <div className="space-y-6 animate-fade">
+                         <div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-white">Montando Combo</h2><button onClick={()=>setEditandoId(null)} className="text-red-400 underline">Voltar</button></div>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="card">
+                                <label className="text-sm text-slate-400">Nome do Combo</label>
+                                <input value={formNome} onChange={e=>setFormNome(e.target.value)} placeholder="Ex: Casal Apaixonado (2 Açaís)" />
+                                
+                                <label className="text-sm text-slate-400 mt-4 block">Itens do Combo</label>
+                                <select onChange={(e)=>adicionarItemNoCombo(e.target.value)} value="">
+                                    <option value="">+ Adicionar Produto...</option>
+                                    {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                                </select>
+                                <div className="mt-2 space-y-2">
+                                    {itensCombo.map((item, idx) => {
+                                        const prod = produtos.find(p => p.id === item.produto_id);
+                                        return (
+                                            <div key={idx} className="flex justify-between bg-slate-800 p-2 rounded items-center">
+                                                <span className="text-sm text-white">{prod?.nome}</span>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-xs text-slate-500">Custo: R$ {custosPorProduto[item.produto_id]?.toFixed(2)}</span>
+                                                    <button onClick={()=>removerItemDoCombo(idx)} className="text-red-500 font-bold">X</button>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                            
+                            <div className="card bg-slate-900 border border-purple-500/30">
+                                <h3 className="font-bold text-purple-400 mb-4">Análise Financeira</h3>
+                                <div className="flex justify-between mb-2"><span className="text-slate-400">Custo dos Itens (CMV):</span><span className="font-bold text-red-400">R$ {custoTotalCombo.toFixed(2)}</span></div>
+                                
+                                <label className="text-sm text-white mt-4 block font-bold">Por quanto vai vender?</label>
+                                <input type="number" className="text-2xl font-bold text-green-400" value={formPreco} onChange={e=>setFormPreco(e.target.value)} placeholder="0.00" />
+                                
+                                <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+                                    <div className="flex justify-between"><span className="text-slate-300">Lucro Bruto:</span><span className="font-bold text-green-400">R$ {lucro.toFixed(2)}</span></div>
+                                    <div className="flex justify-between"><span className="text-slate-300">Margem:</span><span className={`font-bold ${margem<20?'text-red-500':'text-green-500'}`}>{margem.toFixed(1)}%</span></div>
+                                </div>
+                                <button onClick={salvarCombo} className="btn-success w-full mt-6">Salvar Combo</button>
+                            </div>
+                         </div>
+                    </div>
+                )
+            }
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-white">Meus Combos</h2><button onClick={()=>abrirEditor(null)} className="btn-primary w-auto">+ Novo Combo</button></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {combos.map(c => (
+                            <div key={c.id} className="card relative hover:bg-slate-800 transition">
+                                <div className="flex justify-between items-start">
+                                    <div><h3 className="font-bold text-lg text-white">{c.nome}</h3><p className="text-2xl font-bold text-green-400 mt-1">R$ {Number(c.preco_venda).toFixed(2)}</p></div>
+                                    <div className="flex gap-2"><button onClick={()=>abrirEditor(c)} className="bg-slate-700 p-2 rounded text-blue-400"><Icon name="pencil" size={16}/></button><button onClick={()=>excluirCombo(c.id)} className="bg-slate-700 p-2 rounded text-red-400"><Icon name="trash-2" size={16}/></button></div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             );
@@ -580,27 +495,25 @@
             const [aba, setAba] = useState('precificacao');
             if (erroConfig) return <div className="min-h-screen flex items-center justify-center text-red-500 font-bold bg-slate-900 p-10 border border-red-500 m-10 rounded">{erroConfig}</div>;
 
-            const NavItem = ({id, icon, label}) => (
-                <button onClick={()=>setAba(id)} className={`flex items-center gap-3 p-3 rounded transition w-full ${aba===id?'bg-purple-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-800'}`}>
-                    <Icon name={icon} /> <span className="font-medium">{label}</span>
-                </button>
-            );
+            const NavItem = ({id, icon, label}) => (<button onClick={()=>setAba(id)} className={`flex items-center gap-3 p-3 rounded transition w-full ${aba===id?'bg-purple-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-800'}`}><Icon name={icon} /> <span className="font-medium">{label}</span></button>);
 
             return (
                 <div className="min-h-screen flex flex-col md:flex-row">
                     <aside className="w-full md:w-64 bg-slate-900 border-r border-slate-800 p-4 flex flex-col gap-2">
-                        <div className="mb-6 p-2"><h1 className="text-2xl font-bold text-purple-400 flex items-center gap-2"><Icon name="zap" /> AçaíMetrics</h1><p className="text-xs text-slate-500 mt-1">Versão 10.1 Metas</p></div>
+                        <div className="mb-6 p-2"><h1 className="text-2xl font-bold text-purple-400 flex items-center gap-2"><Icon name="zap" /> AçaíMetrics</h1><p className="text-xs text-slate-500 mt-1">Versão 11.0 Combos</p></div>
                         <nav className="flex-1 space-y-1">
                             <NavItem id="estoque" icon="package" label="1. Estoque" />
-                            <NavItem id="produtos" icon="coffee" label="2. Meus Produtos" />
-                            <NavItem id="precificacao" icon="calculator" label="3. Precificação" />
-                            <NavItem id="custos" icon="wallet" label="4. Custos Fixos" />
-                            <NavItem id="fluxo" icon="bar-chart-3" label="5. Fluxo de Caixa" />
+                            <NavItem id="produtos" icon="coffee" label="2. Produtos" />
+                            <NavItem id="combos" icon="layers" label="3. Combos (Novo)" />
+                            <NavItem id="precificacao" icon="calculator" label="4. Precificação" />
+                            <NavItem id="custos" icon="wallet" label="5. Custos Fixos" />
+                            <NavItem id="fluxo" icon="bar-chart-3" label="6. Fluxo Caixa" />
                         </nav>
                     </aside>
                     <main className="flex-1 p-6 overflow-y-auto">
                         {aba === 'estoque' && <ModuloEstoque />}
                         {aba === 'produtos' && <ModuloProdutos />}
+                        {aba === 'combos' && <ModuloCombos />}
                         {aba === 'precificacao' && <ModuloPrecificacao />}
                         {aba === 'custos' && <ModuloCustos />}
                         {aba === 'fluxo' && <ModuloFluxo />}
