@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AçaíMetrics | v12.0 Ultimate</title>
+    <title>AçaíMetrics | v12.1 Edição de Receitas</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -41,14 +41,11 @@
         const { useState, useEffect } = React;
 
         // ==========================================================
-        // ⚠️ CONFIGURAÇÃO DO SEU BANCO DE DADOS
+        // CONFIGURAÇÃO DO BANCO DE DADOS
         // ==========================================================
         
-        // 1. URL do seu Supabase (Já configurada!)
         const SUPABASE_URL = "https://gmbtewbpojuqrnehrfmk.supabase.co"; 
-        
-        // 2. Cole a sua KEY (anon public) aqui dentro das aspas
-        const SUPABASE_KEY = "SUA_KEY_GIGANTE_AQUI";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtYnRld2Jwb2p1cXJuZWhyZm1rIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NjI4MTQxNCwiZXhwIjoyMDgxODU3NDE0fQ.jp29z5HyiM1TaL5JQxNjQvOT0hd3sXKAu2UXfiQI8k4";
         
         // ==========================================================
 
@@ -57,7 +54,7 @@
 
         try {
             if (!SUPABASE_URL || SUPABASE_URL.includes("SEU_ID")) throw new Error("ERRO: Configure a URL do Supabase.");
-            if (!SUPABASE_KEY || SUPABASE_KEY.includes("SUA_KEY")) throw new Error("ERRO: Cole a sua CHAVE pública do Supabase na linha 65.");
+            if (!SUPABASE_KEY || SUPABASE_KEY.includes("SUA_KEY")) throw new Error("ERRO: Cole a sua CHAVE pública do Supabase.");
             client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         } catch (err) {
             erroConfig = err.message;
@@ -159,7 +156,7 @@
             );
         };
 
-        // --- MÓDULO 2: MEUS PRODUTOS ---
+        // --- MÓDULO 2: MEUS PRODUTOS (COM EDIÇÃO DE ITENS SUGERIDA) ---
         const ModuloProdutos = () => {
             const [produtos, setProdutos] = useState([]);
             const [nomeNovo, setNomeNovo] = useState('');
@@ -176,21 +173,58 @@
                 const [insumos, setInsumos] = useState([]);
                 const [addId, setAddId] = useState('');
                 const [addQtd, setAddQtd] = useState('');
+                
+                // Estados para controle de edição inline do ingrediente
+                const [editandoItemId, setEditandoItemId] = useState(null);
+                const [editQtd, setEditQtd] = useState('');
 
                 useEffect(() => { loadItens(); loadInsumos(); }, []);
                 async function loadInsumos() { const {data} = await client.from('insumos').select('*').order('nome'); if(data) setInsumos(data); }
                 async function loadItens() { const {data} = await client.from('itens_receita').select('*, insumos(*)').eq('produto_id', produto.id); if(data) setItens(data); }
-                async function adicionar() { if(!addId || !addQtd) return; await client.from('itens_receita').insert([{ produto_id: produto.id, insumo_id: addId, Academic: addQtd, quantidade: addQtd }]); setAddQtd(''); loadItens(); }
-                async function remover(id) { await client.from('itens_receita').delete().eq('id', id); loadItens(); }
+                
+                async function adicionar() { 
+                    if(!addId || !addQtd) return; 
+                    await client.from('itens_receita').insert([{ produto_id: produto.id, insumo_id: addId, quantidade: addQtd }]); 
+                    setAddQtd(''); 
+                    loadItens(); 
+                }
+                
+                async function remover(id) { 
+                    await client.from('itens_receita').delete().eq('id', id); 
+                    loadItens(); 
+                }
+
+                async function salvarEdicaoItem(id) {
+                    if (!editQtd) return;
+                    await client.from('itens_receita').update({ quantidade: editQtd }).eq('id', id);
+                    setEditandoItemId(null);
+                    loadItens();
+                }
+
                 const custoTotal = itens.reduce((acc, i) => acc + (Number(i.quantidade) * Number(i.insumos?.custo_atual||0)), 0);
 
                 return (
                     <div className="mt-4 bg-slate-900 p-4 rounded border border-slate-700">
                         <p className="text-xs text-slate-400 mb-2 uppercase font-bold">Ingredientes & Proporções:</p>
                         {itens.map(i => (
-                            <div key={i.id} className="flex justify-between text-sm mb-2 border-b border-slate-800 pb-1">
-                                <span>{i.insumos?.nome} ({Number(i.quantidade)} {i.insumos?.unidade_medida})</span>
-                                <div className="flex gap-4"><span className="text-green-400 font-mono">R$ {(Number(i.quantidade)*Number(i.insumos?.custo_atual)).toFixed(2)}</span><button onClick={()=>remover(i.id)} className="text-red-500 font-bold">X</button></div>
+                            <div key={i.id} className="flex justify-between items-center text-sm mb-2 border-b border-slate-800 pb-1">
+                                {editandoItemId === i.id ? (
+                                    <div className="flex w-full gap-2 items-center">
+                                        <span className="truncate flex-1 text-slate-300">{i.insumos?.nome}</span>
+                                        <input type="number" value={editQtd} onChange={e=>setEditQtd(e.target.value)} className="w-20 text-sm p-1 m-0 bg-slate-800 border-slate-600" />
+                                        <button onClick={()=>salvarEdicaoItem(i.id)} className="bg-green-600 px-2 py-1 rounded text-white font-bold"><Icon name="check" size={14}/></button>
+                                        <button onClick={()=>setEditandoItemId(null)} className="bg-slate-700 px-2 py-1 rounded text-slate-300 font-bold"><Icon name="x" size={14}/></button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <span>{i.insumos?.nome} ({Number(i.quantidade)} {i.insumos?.unidade_medida})</span>
+                                        <div className="flex gap-3 items-center">
+                                            <span className="text-green-400 font-mono">R$ {(Number(i.quantidade)*Number(i.insumos?.custo_atual)).toFixed(2)}</span>
+                                            <button onClick={()=>{setEditandoItemId(i.id); setEditQtd(i.quantidade);}} className="text-blue-400 hover:text-white"><Icon name="pencil" size={14}/></button>
+                                            <button onClick={()=>remover(i.id)} className="text-red-500 font-bold hover:text-red-400">X</button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         ))}
                         <div className="flex gap-2 mt-4">
@@ -248,8 +282,8 @@
                 if (receitas && p) {
                     const mapaCustos = {};
                     p.forEach(prod => {
-                        const receitaDoProd = receitas.filter(r => r.produto_id === prod.id);
-                        const custo = receitaDoProd.reduce((acc, r) => acc + (Number(r.quantidade) * Number(r.insumos?.custo_atual || 0)), 0);
+                        const receiverDoProd = receitas.filter(r => r.produto_id === prod.id);
+                        const custo = receiverDoProd.reduce((acc, r) => acc + (Number(r.quantidade) * Number(r.insumos?.custo_atual || 0)), 0);
                         mapaCustos[prod.id] = custo;
                     });
                     setCustosPorProduto(mapaCustos);
@@ -566,7 +600,7 @@
 
         // --- APP SHELL ---
         const App = () => {
-            const [aba, setAba] = useState('precificacao');
+            const [aba, setAba] = useState('produtos'); 
             if (erroConfig) return <div className="min-h-screen flex items-center justify-center text-red-500 font-bold bg-slate-900 p-10 border border-red-500 m-10 rounded">{erroConfig}</div>;
 
             const NavItem = ({id, icon, label}) => (<button onClick={()=>setAba(id)} className={`flex items-center gap-3 p-3 rounded transition w-full ${aba===id?'bg-purple-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-800'}`}><Icon name={icon} /> <span className="font-medium">{label}</span></button>);
@@ -574,7 +608,7 @@
             return (
                 <div className="min-h-screen flex flex-col md:flex-row">
                     <aside className="w-full md:w-64 bg-slate-900 border-r border-slate-800 p-4 flex flex-col gap-2">
-                        <div className="mb-6 p-2"><h1 className="text-2xl font-bold text-purple-400 flex items-center gap-2"><Icon name="zap" /> AçaíMetrics</h1><p className="text-xs text-slate-500 mt-1">Versão 12.0 Ultimate</p></div>
+                        <div className="mb-6 p-2"><h1 className="text-2xl font-bold text-purple-400 flex items-center gap-2"><Icon name="zap" /> AçaíMetrics</h1><p className="text-xs text-slate-500 mt-1">Versão 12.1 Edição Receitas</p></div>
                         <nav className="flex-1 space-y-1">
                             <NavItem id="estoque" icon="package" label="1. Estoque" />
                             <NavItem id="produtos" icon="coffee" label="2. Produtos" />
