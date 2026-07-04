@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AçaíMetrics | v12.0 Ultimate</title>
     
-    <!-- Bibliotecas Essenciais -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -28,7 +27,6 @@
         .modal-content { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #475569; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
     </style>
 
-    <!-- Detector de Erros Avançado -->
     <script>
         window.onerror = function(message, source, lineno, colno, error) {
             document.body.innerHTML = '<div style="color:red; padding:20px; background:#330000; font-size:18px; font-family:monospace;"><h1>Erro Crítico Detectado!</h1><p>'+message+'</p><p>Linha: '+lineno+'</p></div>';
@@ -46,11 +44,11 @@
         // ⚠️ CONFIGURAÇÃO DO SEU BANCO DE DADOS
         // ==========================================================
         
-        // 1. URL do seu Supabase
+        // 1. URL do seu Supabase (Já configurada!)
         const SUPABASE_URL = "https://gmbtewbpojuqrnehrfmk.supabase.co"; 
         
-        // 2. Chave do Supabase
-        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtYnRld2Jwb2p1cXJuZWhyZm1rIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NjI4MTQxNCwiZXhwIjoyMDgxODU3NDE0fQ.jp29z5HyiM1TaL5JQxNjQvOT0hd3sXKAu2UXfiQI8k4";
+        // 2. Cole a sua KEY (anon public) aqui dentro das aspas
+        const SUPABASE_KEY = "SUA_KEY_GIGANTE_AQUI";
         
         // ==========================================================
 
@@ -182,7 +180,7 @@
                 useEffect(() => { loadItens(); loadInsumos(); }, []);
                 async function loadInsumos() { const {data} = await client.from('insumos').select('*').order('nome'); if(data) setInsumos(data); }
                 async function loadItens() { const {data} = await client.from('itens_receita').select('*, insumos(*)').eq('produto_id', produto.id); if(data) setItens(data); }
-                async function adicionar() { if(!addId || !addQtd) return; await client.from('itens_receita').insert([{ produto_id: produto.id, insumo_id: addId, quantidade: addQtd }]); setAddQtd(''); loadItens(); }
+                async function adicionar() { if(!addId || !addQtd) return; await client.from('itens_receita').insert([{ produto_id: produto.id, insumo_id: addId, Academic: addQtd, quantidade: addQtd }]); setAddQtd(''); loadItens(); }
                 async function remover(id) { await client.from('itens_receita').delete().eq('id', id); loadItens(); }
                 const custoTotal = itens.reduce((acc, i) => acc + (Number(i.quantidade) * Number(i.insumos?.custo_atual||0)), 0);
 
